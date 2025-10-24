@@ -1,0 +1,97 @@
+name: Updater
+
+on:
+  schedule:
+    - cron:  '45 1 * * *'
+  workflow_dispatch:
+
+env:
+  REPO: "viniplay"
+
+jobs:
+  base-updater:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v3.1.0
+
+      - name: Check for updates and trigger
+        run: |
+          git config --local user.email "bot@aptalca.doot"
+          git config --local user.name "AptalcaBot"
+          DISTRO=$(cat Dockerfile | grep 'FROM' | sed 's|.*baseimage-\(.*\):.*|\1|')
+          TAG=$(cat Dockerfile | grep 'FROM' | sed 's|.*:\(.*\)|\1|')
+          token=$(curl -sX GET \
+            "https://ghcr.io/token?scope=repository%3Alinuxserver%2Fbaseimage-${DISTRO}%3Apull" \
+            | jq -r '.token')
+          multidigest=$(curl -s \
+            --header "Accept: application/vnd.docker.distribution.manifest.v2+json" \
+            --header "Accept: application/vnd.oci.image.index.v1+json" \
+            --header "Authorization: Bearer ${token}" \
+            "https://ghcr.io/v2/linuxserver/baseimage-${DISTRO}/manifests/${TAG}")
+          multidigest=$(jq -r ".manifests[] | select(.platform.architecture == \"amd64\").digest?" <<< "${multidigest}")
+          EXTDIGEST=$(curl -s \
+            --header "Accept: application/vnd.docker.distribution.manifest.v2+json" \
+            --header "Accept: application/vnd.oci.image.manifest.v1+json" \
+            --header "Authorization: Bearer ${token}" \
+            "https://ghcr.io/v2/linuxserver/baseimage-${DISTRO}/manifests/${multidigest}" \
+            | jq -r '.config.digest')
+          if [ -z "${EXTDIGEST}" ]; then
+            echo "Unable to retrieve external digest. Skipping."
+            echo "Unable to retrieve external digest. Skipping." >> $GITHUB_STEP_SUMMARY
+            EXTDIGEST=$(cat baseimage-digest.txt)
+          else
+            echo "External digest retrieved:  ${EXTDIGEST}"
+            echo "External digest retrieved:  ${EXTDIGEST}" >> $GITHUB_STEP_SUMMARY
+          fi
+          LASTDIGEST=$(cat baseimage-digest.txt)
+          if [ "${LASTDIGEST}" != "${EXTDIGEST}" ]; then
+            echo "Last used baseimage digest: ${LASTDIGEST}"
+            echo "Baseimage seems to have been updated. Updating baseimage digest."
+            echo "Last used baseimage digest: ${LASTDIGEST}" >> $GITHUB_STEP_SUMMARY
+            echo "Baseimage seems to have been updated. Updating baseimage digest." >> $GITHUB_STEP_SUMMARY
+            echo -n "${EXTDIGEST}" > baseimage-digest.txt
+            BUILD_IMAGE="yes"
+            git add . || :
+            git commit -m '[bot] Updating baseimage digest' || :
+            git push || :
+          else
+            echo "Baseimage seems to be the same. Skipping."
+          fi
+          echo "Checking app for updates"
+          APP_VERSION=$(curl -sfX GET "https://api.github.com/repos/ardoviniandrea/ViniPlay/releases/latest" \
+            | jq -r '.tag_name')
+          if [ -z "${APP_VERSION}" ] || [ "${APP_VERSION}" = "null" ]; then
+            echo "Unable to retrieve app version. Skipping."
+            echo "Unable to retrieve app version. Skipping." >> $GITHUB_STEP_SUMMARY
+            APP_VERSION=$(cat app_version.txt)
+          else
+            echo "App version retrieved: ${APP_VERSION}"
+            echo "App version retrieved: ${APP_VERSION}" >> $GITHUB_STEP_SUMMARY
+          fi
+          APP_LAST_VERSION=$(cat app_version.txt)
+          if [ "${APP_VERSION}" != "${APP_LAST_VERSION}" ]; then
+            echo "Last app version: ${APP_LAST_VERSION}"
+            echo "App seems to have been updated. Updating version."
+            echo "Last app version: ${APP_LAST_VERSION}" >> $GITHUB_STEP_SUMMARY
+            echo "App seems to have been updated. Updating version." >> $GITHUB_STEP_SUMMARY
+            echo -n "${APP_VERSION}" > app_version.txt
+            BUILD_IMAGE="yes"
+            git add . || :
+            git commit -m '[bot] Updating app version' || :
+            git push || :
+          else
+            echo "App version seems to be the same. Skipping."
+          fi
+          if [ "${BUILD_IMAGE}" = "yes" ]; then
+            echo "Triggering new build!!"
+            echo "Triggering new build!!"  >> $GITHUB_STEP_SUMMARY
+            curl -iX POST \
+              -H "Authorization: token ${{ secrets.CR_PAT }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              -d "{\"ref\":\"refs/heads/main\"}" \
+              https://api.github.com/repos/aptalca/${REPO}/actions/workflows/BuildImage.yml/dispatches
+          else
+            echo "No changes to either baseimage or app versions."
+            echo "No changes to either baseimage or app versions." >> $GITHUB_STEP_SUMMARY
+          fi
