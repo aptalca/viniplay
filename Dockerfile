@@ -6,6 +6,7 @@ LABEL org.opencontainers.image.source=https://github.com/aptalca/viniplay
 ARG APP_VERSION
 
 ENV HOME="/config"
+ENV ATTACHED_DEVICES_PERMS="/dev/dri -type c"
 
 RUN \
   echo "**** install build deps ****" && \
