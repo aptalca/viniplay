@@ -17,6 +17,7 @@ RUN \
   echo "**** install runtime packages ****" && \
   apk add --no-cache \
     ffmpeg \
+    intel-media-driver \
     npm && \
   echo "**** install app ****" && \
   if [ -z "${APP_VERSION+x}" ]; then \
