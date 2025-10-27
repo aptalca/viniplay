@@ -19,11 +19,15 @@ RUN \
   apt-get install -y \
     build-essential \
     python3-setuptools && \
+  curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
   echo "**** install runtime packages ****" && \
   apt-get install -y --no-install-recommends \
     jellyfin-ffmpeg7 \
     mesa-va-drivers \
-    npm && \
+    nodejs \
+    vainfo && \
+  echo "**** install npm ****" && \
+  curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
   echo "**** install app ****" && \
   if [ -z "${APP_VERSION+x}" ]; then \
     APP_VERSION=$(curl -sfX GET "https://api.github.com/repos/ardoviniandrea/ViniPlay/releases/latest" \
