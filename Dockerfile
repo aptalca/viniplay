@@ -49,6 +49,7 @@ RUN \
   apt-get -y purge \
     build-essential \
     python3-setuptools && \
+  apt-get -y autoremove && \
   rm -rf \
     /var/lib/apt/lists/* \
     /var/tmp/* \
